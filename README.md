@@ -1,143 +1,162 @@
-# STDBEV
+# stdbev
 
-A tiny typed decision model that runs **inside** a SpacetimeDB database.
+A small typed decision model that runs inside a SpacetimeDB database.
 
-When a program needs a judgment call — *is this ticket billing or a bug? how severe is
-this? should we retry?* — it normally asks a language model over the network. That costs
-money, takes a second, and can fail. STDBEV answers in the same transaction that asked,
-from a 48 KB model compiled into the database's WASM module.
+Instead of calling out to a language model when your code needs a judgment call,
+stdbev answers from an INT8 model compiled into the database's WASM module, in the
+same transaction that asked.
 
-It stays small by never generating anything. It only picks from a list you hand it, and
-returns a calibrated probability for each option.
+It never generates text. It picks from a list you supply and returns a probability
+for each option.
 
-| Ask | Means | Example |
+## Example
+
+```rust
+use spacetimedb::ReducerContext;
+
+#[spacetimedb::reducer]
+pub fn route_ticket(ctx: &ReducerContext, id: String, body: String) -> Result<(), String> {
+    decide_choice(
+        ctx,
+        id,
+        body,
+        "What type of request is this?".into(),
+        vec!["billing".into(), "technical".into(), "other".into()],
+        vec!["payments".into(), "software".into(), "everything else".into()],
+    )
+}
+```
+
+```console
+$ spacetime call -s local stdbev decide_choice '"t1"' \
+    '"[billing] I was charged twice this month"' \
+    '"What type of request is this?"' \
+    '["billing","technical","other"]' '["a","b","c"]'
+
+$ spacetime sql -s local stdbev "SELECT selected_label, confidence FROM decision_result"
+ selected_label | confidence
+----------------+------------
+ "billing"      | 1.0
+```
+
+## Question types
+
+| Type | Returns | Use for |
 |---|---|---|
-| **Choice** | pick one from a menu | billing / technical / other |
-| **Noul** | how likely is this true? | "retry?" → 0.83 |
-| **Score** | rate on a ladder | low/medium/high/critical → 2.4 |
+| `Choice` | one option plus a probability for each | routing, classification, picking an action |
+| `Noul` | probability that a condition holds | yes/no judgments |
+| `Score` | expected value over ordered levels | severity, priority, risk |
 
-All three are the same machine underneath. Noul is a Choice between two options named
-`no` and `yes`; Score is a Choice over ladder rungs whose expectation is then taken.
+Noul is a Choice between `no` and `yes`. Score is a Choice over ladder rungs whose
+expectation is taken. All three share one scorer.
 
-## Status, honestly
+## Install
 
-**The infrastructure works.** Train → quantize to INT8 → embed in WASM → run in
-SpacetimeDB, with answers that are *bit-identical* to running natively.
+Requires Rust 1.98, the `wasm32-unknown-unknown` target, and the SpacetimeDB CLI.
 
-**The model works inside its training distribution and is unsafe outside it.**
-
-```
-test top-1                0.948
-expected calibration err  0.0485
-shuffled-context control  0.337   (= chance; it genuinely reads state)
-artifact                  47,940 bytes
-native ↔ WASM agreement   exact — delta 0.000e0
+```console
+git clone https://github.com/douglance/stdbev
+cd stdbev
+cargo xtask ci
 ```
 
-But on unfamiliar input it is **confidently wrong**:
+## Usage
 
-| state | answer | confidence |
-|---|---|---|
-| `[billing] zzz` | **technical** | **1.000** ❌ |
-| `[technical] qqq www eee` | **billing** | **0.9996** ❌ |
+Build and publish the module:
 
-The calibration figure is an in-distribution measurement. It does not hold for arbitrary
-input, and a caller thresholding at 0.9 will get wrong answers at 1.0. Read
-[`docs/what-this-architecture-can-learn.md`](docs/what-this-architecture-can-learn.md)
-before using this for anything.
-
-## What this architecture can and cannot learn
-
-The most useful result here. Identical code, identical architecture, only the task
-differs:
-
-| task | example | untrained | trained |
-|---|---|---|---|
-| **lexical** | `"[billing] I was charged twice"` → `[billing, technical, other]` | 0.382 | **0.955** |
-| **semantic** | `"I was charged twice"` → `[billing, technical, other]` | 0.334 | **0.424** |
-
-Capacity is not the constraint — 508k and 43k parameter models both stall near 0.42 on
-the semantic task, a 12× size difference worth 0.03.
-
-A pooled byte encoder needs options to be **distinguishable** (→ short) *and* to **share
-vocabulary with the state** (→ long). Mean pooling cannot deliver both. So this design
-routes on cues already present in the state; it does not supply world knowledge.
-
-## Why "bit-identical" and not "close enough"
-
-The model runs natively and as WASM inside SpacetimeDB. If those disagree, nothing
-downstream is trustworthy. Two decisions make them agree exactly:
-
-- Every transcendental (`exp`, `tanh`, `sqrt`) goes through the `libm` crate on both
-  targets. Platform libm differs between macOS and wasm.
-- Float sums accumulate in a fixed order — eight independent accumulators reduced in a
-  hardcoded pairwise order, fast enough to vectorize and deterministic enough to
-  reproduce.
-
-Verified across three environments and two CPU architectures, including SpacetimeDB
-Maincloud. A non-zero parity delta is a bug to find, not a tolerance to widen.
-
-## Quick start
-
-```bash
-cargo xtask ci                 # fmt, clippy, 74 tests, source policy, golden fixtures
-cargo xtask data 100000        # synthetic corpus, split by template family
-cargo xtask train 5 20000      # Candle; early stops on CALIBRATED validation NLL
-cargo xtask eval               # fit temperature, score held-out families
-cargo xtask export 0.67        # quantize + refuse to write if answers changed
-```
-
-End to end through SpacetimeDB:
-
-```bash
-spacetime start &
+```console
 cargo build --release --target wasm32-unknown-unknown \
   --manifest-path crates/stdbev-stdb/Cargo.toml
 spacetime publish -s local -y --delete-data=always stdbev \
   --bin-path crates/stdbev-stdb/target/wasm32-unknown-unknown/release/stdbev_stdb.wasm
-cargo xtask parity local stdbev          # native vs WASM, must be exact
 ```
 
-## Layout
+Train your own model:
 
-| crate | owns |
-|---|---|
-| `stdbev-types` | domain types, validation, the `STDBEV01` format definition |
-| `stdbev-format` | byte tokenization and canonical question encoding |
-| `stdbev-math` | framework-free kernels (`no_std`, so platform float ops cannot sneak in) |
-| `stdbev-runtime` | artifact parsing and quantized inference |
-| `stdbev-quant` | quantization and artifact writing |
-| `stdbev-data` | synthetic generation, splits, JSONL |
-| `stdbev-train` | Candle model, training loop, export |
-| `stdbev-eval` | metrics, temperature calibration |
-| `stdbev-stdb` | the SpacetimeDB module (own workspace: WASM-only) |
-| `xtask` | automation and CI gates |
+```console
+cargo xtask data 100000     # generate a synthetic corpus
+cargo xtask train 5 20000   # train, early stopping on calibrated validation NLL
+cargo xtask eval            # fit temperature, score the held-out split
+cargo xtask export 0.67     # quantize to INT8 and write artifacts/model.stdbq
+```
 
-`crates/stdbev-stdb` is deliberately **not** a workspace member: it links SpacetimeDB
-host imports that exist only inside the WASM runtime, so it cannot build for the host at
-all. Including it would break `cargo build --workspace` for everyone.
+`export` refuses to write unless the quantized model agrees with the FP32 original on
+at least 99% of validation examples.
+
+## Limitations
+
+Read this before using stdbev for anything.
+
+A model this size routes on cues present in the state text. It does not supply world
+knowledge. Given `[billing] I was charged twice` it answers correctly; given
+`I was charged twice` with no tag, it will not reliably infer "billing". Design your
+option labels and your state so the signal is actually there.
+
+Outside its training distribution it fails confidently, returning wrong answers at
+very high confidence rather than low ones. Calibration figures are in-distribution
+measurements and do not hold for arbitrary input. If you threshold on confidence,
+validate against your own data first.
+
+Reported metrics live in [docs/](docs/) and are regenerated by `cargo xtask eval`,
+not maintained here.
+
+## Determinism
+
+Native and WASM answers are bit-identical, not merely close. Two things make that true:
+
+1. Every transcendental (`exp`, `tanh`, `sqrt`) goes through the `libm` crate on both
+   targets, rather than the platform's libm, which differs between macOS and wasm.
+2. Float sums accumulate in a fixed order, using independent lane accumulators reduced
+   in a hardcoded pairwise order.
+
+`cargo xtask parity` asserts it against a live database. A non-zero delta is a bug
+rather than a tolerance to widen.
+
+## How it works
+
+The model reads raw UTF-8 bytes with no tokenizer. Context passes through a small
+transformer; each option is pooled to a single vector. Every option then acts as a
+query over the encoded context, producing one logit, and all logits are normalized
+together with softmax.
+
+Weights are INT8 with per-output-channel scales; activations stay FP32. The
+architecture, a fitted temperature, and the option encoding all ship in the artifact
+header, so a model cannot be served with the wrong encoding.
+
+## Project layout
+
+```
+crates/
+  stdbev-types      domain types, validation, STDBEV01 format definition
+  stdbev-format     byte tokenization, canonical question encoding
+  stdbev-math       framework-free kernels (no_std)
+  stdbev-runtime    artifact parsing and quantized inference
+  stdbev-quant      quantization and artifact writing
+  stdbev-data       synthetic generation, splits, JSONL
+  stdbev-train      Candle model, training loop, export
+  stdbev-eval       metrics and temperature calibration
+  stdbev-stdb       the SpacetimeDB module
+xtask/              automation and CI gates
+```
+
+`stdbev-stdb` is not a workspace member. It links SpacetimeDB host imports that only
+exist inside the WASM runtime, so it cannot build for the host, and including it would
+break `cargo build --workspace`.
 
 ## Documentation
 
 - [What this architecture can and cannot learn](docs/what-this-architecture-can-learn.md)
-  — the controlled experiment. Read first.
-- [Baselines](docs/baselines.md) — what an accuracy number has to beat, and a generator
-  bug that made an untrained model beat every fixed guess.
-- [Architecture reference](docs/architecture-reference.md) — what `jevlike` actually
-  does, where this diverged, and two bugs found by reading its source.
-- [Phase 0 measurements](docs/phase0-measurements.md) — every performance number,
-  measured on the real target rather than estimated.
+- [Baselines](docs/baselines.md)
+- [Architecture reference](docs/architecture-reference.md)
+- [Measurements](docs/phase0-measurements.md)
 
 ## Prior art
 
-- [`jevlike`](https://github.com/vinnylarouge/jevlike) — the open reference for the
-  one-pass dynamic-option scorer. This implementation's attention head matches it to
-  machine epsilon (5.5e-17), verified numerically.
-- [`cua-s1-forms`](https://huggingface.co/cua-ai/cua-s1-forms) — an independent
-  research checkpoint using the same head with a transformer encoder.
-- [`jev`](https://docs.typesafe.ai) — TypeSafe's production model, whose Choice / Score /
-  Noul vocabulary this adopts. Its architecture is not public; neither of the above is a
-  reproduction of it.
+Built on the one-pass dynamic-option scorer from
+[jevlike](https://github.com/vinnylarouge/jevlike); the attention head here matches its
+implementation to machine epsilon. The Choice/Score/Noul vocabulary comes from
+[jev](https://docs.typesafe.ai), whose architecture is not public. See also
+[cua-s1-forms](https://huggingface.co/cua-ai/cua-s1-forms).
 
 ## License
 
