@@ -1,0 +1,33 @@
+# Deliberately NOT a member of the root workspace.
+#
+# The module links against SpacetimeDB host imports (`bytes_sink_write` and friends)
+# that only exist inside the WASM runtime, so it cannot be built for the host at all.
+# Leaving it in the workspace would break `cargo build --workspace` for everyone.
+# It is built explicitly by `cargo xtask stdb-build` against wasm32-unknown-unknown,
+# and its behavior is covered by the native/WASM parity test rather than by unit tests.
+[workspace]
+
+[package]
+name = "stdbev-stdb"
+edition = "2024"
+version = "0.1.0"
+license = "MIT"
+rust-version = "1.98"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+spacetimedb = "=2.10.1"
+stdbev-types = { path = "../stdbev-types" }
+stdbev-runtime = { path = "../stdbev-runtime" }
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+# Safe here, unlike the root profile: nothing in the module unwinds, and coverage
+# never runs against the wasm target.
+panic = "abort"
+strip = "symbols"

@@ -1,0 +1,18 @@
+[package]
+name = "stdbev-eval"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+stdbev-data = { path = "../stdbev-data" }
+stdbev-math = { path = "../stdbev-math" }
+libm = { workspace = true }
+serde = { workspace = true }
+
+[dev-dependencies]
+proptest = { workspace = true }
+
+[lints]
+workspace = true

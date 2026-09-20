@@ -1,0 +1,30 @@
+{
+  "fixtures": {
+    "c1": {
+      "probabilities": [
+        0.4145936667919159,
+        0.2583989202976227,
+        0.32700735330581665
+      ],
+      "selected_index": 0
+    },
+    "n1": {
+      "probabilities": [
+        0.4160720407962799,
+        0.5839279294013977
+      ],
+      "selected_index": 1
+    },
+    "s1": {
+      "probabilities": [
+        0.13290639221668243,
+        0.6144746541976929,
+        0.11151551455259323,
+        0.14110338687896729
+      ],
+      "selected_index": 1
+    }
+  },
+  "model_id": "6d3d7a9b758ca03f2c8bff4209d579496a8403f28d9b9728352d24b1fd786e83",
+  "note": "Regenerate with `cargo xtask golden`. A diff here means the numerical path changed -- confirm that was intended before accepting it."
+}

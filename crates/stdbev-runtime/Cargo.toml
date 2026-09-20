@@ -1,0 +1,19 @@
+[package]
+name = "stdbev-runtime"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+stdbev-types = { path = "../stdbev-types" }
+stdbev-format = { path = "../stdbev-format" }
+stdbev-math = { path = "../stdbev-math" }
+bytemuck = { workspace = true }
+libm = { workspace = true }
+
+[dev-dependencies]
+proptest = { workspace = true }
+
+[lints]
+workspace = true

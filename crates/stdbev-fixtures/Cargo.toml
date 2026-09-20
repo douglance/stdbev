@@ -1,0 +1,13 @@
+[package]
+name = "stdbev-fixtures"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+stdbev-types = { path = "../stdbev-types" }
+
+[lints]
+workspace = true

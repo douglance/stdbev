@@ -1,0 +1,20 @@
+[package]
+name = "stdbev-quant"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+stdbev-types = { path = "../stdbev-types" }
+sha2 = { workspace = true }
+
+[dev-dependencies]
+stdbev-runtime = { path = "../stdbev-runtime" }
+stdbev-fixtures = { path = "../stdbev-fixtures" }
+serde_json = { workspace = true }
+proptest = { workspace = true }
+sha2 = { workspace = true }
+
+[lints]
+workspace = true

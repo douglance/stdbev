@@ -1,0 +1,21 @@
+{
+  "architecture": {
+    "attention_heads": 4,
+    "context_length": 224,
+    "feed_forward_width": 512,
+    "model_width": 128,
+    "option_attention_rank": 128,
+    "option_encoder": "pooled",
+    "option_format": "compact",
+    "option_length": 96,
+    "transformer_layers": 2,
+    "vocabulary_size": 257
+  },
+  "artifact_bytes": 535044,
+  "format": "STDBEV01",
+  "model_id": "6d3d7a9b758ca03f2c8bff4209d579496a8403f28d9b9728352d24b1fd786e83",
+  "parameter_count": 508416,
+  "provenance": "genesis: deterministic random weights, NOT trained",
+  "seed": 42,
+  "temperature": 1.0
+}

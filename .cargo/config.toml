@@ -1,0 +1,9 @@
+[alias]
+xtask = "run --package xtask --"
+
+# Plan: simd128 is opt-in. The SpacetimeDB host (wasmtime 39) supports it and does
+# not disable the proposal, but wasm32-unknown-unknown emits none by default and
+# `spacetime build` has no SIMD flag. Without this we land in the ~0.7 GF/s column
+# instead of ~6 GF/s -- a 3.4x loss that looks like an architecture problem.
+[target.wasm32-unknown-unknown]
+rustflags = ["-C", "target-feature=+simd128"]

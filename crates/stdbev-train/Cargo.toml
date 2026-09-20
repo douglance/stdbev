@@ -1,0 +1,21 @@
+[package]
+name = "stdbev-train"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+stdbev-types = { path = "../stdbev-types" }
+stdbev-data = { path = "../stdbev-data" }
+stdbev-format = { path = "../stdbev-format" }
+stdbev-quant = { path = "../stdbev-quant" }
+stdbev-math = { path = "../stdbev-math" }
+stdbev-eval = { path = "../stdbev-eval" }
+candle-core = { workspace = true }
+candle-nn = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[lints]
+workspace = true

@@ -1,0 +1,80 @@
+[workspace]
+resolver = "3"
+members = ["crates/*", "xtask"]
+# The SpacetimeDB module links WASM-only host imports and cannot build for the host;
+# it carries its own `[workspace]` and is built by `cargo xtask stdb-build`.
+exclude = ["crates/stdbev-stdb"]
+
+[workspace.package]
+edition = "2024"
+version = "0.1.0"
+license = "MIT"
+rust-version = "1.98"
+
+[workspace.dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+schemars = "1.2"
+thiserror = "2"
+sha2 = "0.11"
+rand = "0.10"
+rand_chacha = "0.10"
+
+# Plan defect 2: every transcendental goes through `libm` on BOTH native and wasm,
+# so native<->WASM parity is exact by construction rather than tolerance-tuned.
+libm = "0.2"
+# Plan defect 1: safe, alignment-checked slice casts under forbid(unsafe_code).
+bytemuck = "1.25"
+
+candle-core = "0.11"
+candle-nn = "0.11"
+
+incurs = { version = "0.7.4", features = ["mcp"] }
+
+# Plan defect 7: pinned EXACTLY to the installed CLI (2.10.1). A caret range here
+# silently drifts from the CLI and surfaces as a confusing schema/ABI error.
+spacetimedb = "=2.10.1"
+spacetimedb-sdk = "=2.10.1"
+
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "process", "signal"] }
+
+proptest = "1.11"
+criterion = "0.8"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+unused_must_use = "deny"
+rust_2018_idioms = { level = "deny", priority = -1 }
+
+[workspace.lints.clippy]
+all = { level = "deny", priority = -1 }
+# Plan defect 5: pedantic at `deny` across a workspace with candle+serde fights you
+# daily for no correctness gain. Warn, and deny the ones that actually matter.
+pedantic = { level = "warn", priority = -1 }
+
+# Fires on proper nouns in prose ("SpacetimeDB", "LayerNorm", "GELU"). Backticking
+# them would imply they are code items, which makes the docs read worse, not better.
+doc_markdown = "allow"
+
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+todo = "deny"
+unimplemented = "deny"
+dbg_macro = "deny"
+too_many_lines = "deny"
+excessive_nesting = "deny"
+type_complexity = "deny"
+indexing_slicing = "deny"
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+strip = "symbols"
+# NOTE: `panic = "abort"` is deliberately NOT set here (plan defect 6) -- it breaks
+# `cargo llvm-cov` and release-mode tests, which need unwinding. It belongs only on
+# the wasm module build, which is driven by `spacetime build`.
+
+[profile.bench]
+inherits = "release"

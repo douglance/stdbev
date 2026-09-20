@@ -1,0 +1,10 @@
+too-many-lines-threshold = 50
+excessive-nesting-threshold = 3
+type-complexity-threshold = 150
+
+# Plan defect 5: without these, `--all-targets` cannot compile the test suite,
+# because every test uses unwrap/expect and asserts panic.
+allow-unwrap-in-tests = true
+allow-expect-in-tests = true
+allow-panic-in-tests = true
+allow-dbg-in-tests = false

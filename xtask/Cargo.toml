@@ -1,0 +1,22 @@
+[package]
+name = "xtask"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+stdbev-types = { path = "../crates/stdbev-types" }
+stdbev-quant = { path = "../crates/stdbev-quant" }
+stdbev-runtime = { path = "../crates/stdbev-runtime" }
+serde_json = { workspace = true }
+stdbev-fixtures = { path = "../crates/stdbev-fixtures" }
+stdbev-data = { path = "../crates/stdbev-data" }
+stdbev-train = { path = "../crates/stdbev-train" }
+stdbev-eval = { path = "../crates/stdbev-eval" }
+candle-core = { workspace = true }
+stdbev-math = { path = "../crates/stdbev-math" }
+
+[lints]
+workspace = true

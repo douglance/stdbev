@@ -1,0 +1,20 @@
+[package]
+name = "stdbev-data"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+stdbev-types = { path = "../stdbev-types" }
+stdbev-math = { path = "../stdbev-math" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+
+[dev-dependencies]
+stdbev-types = { path = "../stdbev-types" }
+proptest = { workspace = true }
+
+[lints]
+workspace = true
